@@ -68,9 +68,9 @@ public class Main extends SimpleApplication
         // set sky color
         this.viewPort.setBackgroundColor(new ColorRGBA(0.357f, 0.565f, 0.878f, 1f));
 
-        // createWorldWithNoise();
+        createWorldWithNoise();
         // OR
-        createWorldWithImages();
+        // createWorldWithImages();
 
         // attach to state manager so we can monitor movement.
         this.stateManager.attach(world);

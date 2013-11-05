@@ -27,7 +27,7 @@ public abstract class World extends AbstractAppState
 
     protected float worldHeight = 1f;
 
-    private Material terrainMaterial;
+    
 
     private boolean isLoaded;
     private int totalVisibleChunks = 25;
@@ -65,9 +65,6 @@ public abstract class World extends AbstractAppState
 
         throw new IllegalArgumentException("Invalid block size specified.");
     }
-
-    // TODO: this doesnt need to be here for scenes....
-
 
     /**
      * Set the view distance in tiles for each direction according

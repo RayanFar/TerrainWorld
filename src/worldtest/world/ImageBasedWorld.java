@@ -26,10 +26,8 @@ public class ImageBasedWorld extends World
         super(app, physicsSpace, tileSize, blockSize);
     }
 
-    public final void setMaterial(Material material)
-    {
-        this.terrainMaterial = material;
-    }
+    public final Material getMaterial() { return this.terrainMaterial; }
+    public final void setMaterial(Material material) { this.terrainMaterial = material; }
 
     @Override
     public TerrainQuad getTerrainQuad(TerrainLocation location)

@@ -42,7 +42,7 @@ public abstract class World extends AbstractAppState implements Closeable
     private Map<TerrainLocation, Future> worldTilesQue = new HashMap<TerrainLocation, Future>();
 
 
-    ScheduledThreadPoolExecutor threadpool = new ScheduledThreadPoolExecutor(2);
+    ScheduledThreadPoolExecutor threadpool = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors() * 2);
 
     public World(SimpleApplication app, PhysicsSpace physicsSpace, int tileSize, int blockSize)
     {
@@ -68,7 +68,7 @@ public abstract class World extends AbstractAppState implements Closeable
             case 129: return 7;
             case 257: return 8;
             case 513: return 9;
-            case 1024: return 10;
+            case 1025: return 10;
         }
 
         throw new IllegalArgumentException("Invalid block size specified.");
@@ -222,17 +222,12 @@ public abstract class World extends AbstractAppState implements Closeable
 
 
                 physicsSpace.remove(chunk);
-                int result = app.getRootNode().detachChild(chunk);
+                app.getRootNode().detachChild(chunk);
 
-                if (result < 0)
-                {
-                    String herp = "derp";
-                }
+                iterator.remove();
 
                 if (tileListener != null)
                     tileListener.tileUnloaded(chunk);
-
-                iterator.remove();
 
                 return true;
             }
@@ -277,33 +272,44 @@ public abstract class World extends AbstractAppState implements Closeable
                 }
             }
         }
-
-        for (int x = topLx; x <= botRx; x++)
+        else
         {
-            for (int z = topLz; z <= botRz; z++)
+            for (int x = topLx; x <= botRx; x++)
             {
-                final TerrainLocation location = new TerrainLocation(x, z);
-
-                if (worldTiles.get(location) != null)
-                    continue;
-
-                // check if it's already in the que.
-                if (worldTilesQue.get(location) != null)
-                    continue;
-
-                Future newChunk = threadpool.submit(new Callable<PendingChunk>()
+                for (int z = topLz; z <= botRz; z++)
                 {
-                    public PendingChunk call()
+                    final TerrainLocation location = new TerrainLocation(x, z);
+
+                    if (worldTiles.get(location) != null)
+                        continue;
+
+                    // check if it's already in the que.
+                    if (worldTilesQue.get(location) != null)
+                        continue;
+
+                    TerrainChunk chunk = worldTilesCache.get(location);
+                    if (chunk != null)
                     {
-                        TerrainChunk newChunk = getTerrainChunk(location);
-                        PendingChunk pending = new PendingChunk(location, newChunk);
-
-                        return pending;
+                        app.getRootNode().attachChild(chunk);
+                        worldTiles.put(location, chunk);
                     }
-                });
+                    else
+                    {
+                        Future newChunk = threadpool.submit(new Callable<PendingChunk>()
+                        {
+                            public PendingChunk call()
+                            {
+                                TerrainChunk newChunk = getTerrainChunk(location);
+                                PendingChunk pending = new PendingChunk(location, newChunk);
 
-                worldTilesQue.put(location, newChunk);
-                return true;
+                                return pending;
+                            }
+                        });
+
+                        worldTilesQue.put(location, newChunk);
+                        return true;
+                    }
+                }
             }
         }
 

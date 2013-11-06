@@ -293,6 +293,8 @@ public abstract class World extends AbstractAppState implements Closeable
                         app.getRootNode().attachChild(chunk);
                         physicsSpace.add(chunk);
                         worldTiles.put(location, chunk);
+
+                        return true;
                     }
                     else
                     {

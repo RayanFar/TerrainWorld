@@ -9,7 +9,7 @@ import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.RenderManager;
-import com.jme3.terrain.geomipmap.TerrainQuad;
+import com.jme3.system.AppSettings;
 import com.jme3.terrain.noise.ShaderUtils;
 import com.jme3.terrain.noise.basis.FilteredBasis;
 import com.jme3.terrain.noise.filter.IterativeFilter;
@@ -22,6 +22,7 @@ import com.jme3.texture.Texture;
 import com.jme3.texture.Texture.WrapMode;
 import worldtest.world.ImageBasedWorld;
 import worldtest.world.NoiseBasedWorld;
+import worldtest.world.TerrainChunk;
 import worldtest.world.TileListener;
 import worldtest.world.World;
 
@@ -39,6 +40,15 @@ public class Main extends SimpleApplication
     public static void main(String[] args)
     {
         app = new Main();
+
+        app.setShowSettings(true);
+        app.setDisplayStatView(true);
+
+        AppSettings settings = new AppSettings(true);
+        settings.setResolution(1280, 720);
+        settings.setFullscreen(false);
+        // settings.setFrameRate(10);
+        app.setSettings(settings);
         app.start();
     }
 
@@ -74,6 +84,8 @@ public class Main extends SimpleApplication
 
         // attach to state manager so we can monitor movement.
         this.stateManager.attach(world);
+
+        this.getCamera().setLocation(new Vector3f(0, 150, 0));
     }
 
     private Material createTerrainMaterial()
@@ -125,6 +137,8 @@ public class Main extends SimpleApplication
 
         newWorld.setViewDistance(2);
         // newWorld.setViewDistance(14, 1, 2, 1);
+
+        newWorld.setCacheTime(5000);
 
         Material terrainMaterial = createTerrainMaterial();
         newWorld.setMaterial(terrainMaterial);
@@ -186,8 +200,8 @@ public class Main extends SimpleApplication
 
         TileListener tileListener = new TileListener()
         {
-            public boolean tileLoaded(TerrainQuad terrainQuad) { return true; }
-            public boolean tileUnloaded(TerrainQuad terrainQuad) { return true; }
+            public boolean tileLoaded(TerrainChunk terrainChunk) { return true; }
+            public boolean tileUnloaded(TerrainChunk terrainChunk) { return true; }
 
             public String imageHeightmapRequired(int x, int z)
             {
@@ -225,26 +239,20 @@ public class Main extends SimpleApplication
     private void displayDebugInfo()
     {
         StringBuilder sb = new StringBuilder()
-                .append("Loaded: ").append(world.getLoadedTileCount());
+                .append("Loaded: ").append(world.getLoadedTileCount())
+                .append("\n")
+                .append("Cached: ").append(world.getCachedTilesCount())
+                .append("\n")
+                .append("Qued: ").append(world.getQuedTilesCount());
+
 
         hudText.setText(sb.toString());
     }
-
-    private boolean hasJoined = false;
 
     @Override
     public void simpleUpdate(float tpf)
     {
         displayDebugInfo();
-
-        if (world.isLoaded() == false || hasJoined == true)
-            return;
-
-
-        float height = world.getHeight(this.getCamera().getLocation());
-        this.getCamera().setLocation(new Vector3f(this.getCamera().getLocation().getX(), height + 3, this.getCamera().getLocation().getZ()));
-
-        this.hasJoined = true;
     }
 
     @Override
@@ -252,4 +260,14 @@ public class Main extends SimpleApplication
     {
 
     }
+
+    @Override
+    public void destroy()
+    {
+        super.destroy();
+
+        if (world != null)
+            world.close();
+    }
+
 }

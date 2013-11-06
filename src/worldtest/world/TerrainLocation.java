@@ -22,17 +22,14 @@ public final class TerrainLocation
     @Override
     public boolean equals(Object obj)
     {
-        if ((obj instanceof TerrainLocation) == false)
-            return false;
+        if (!(obj instanceof TerrainLocation)) { return false; }
+        if (this == obj) return true;
 
-        TerrainLocation location = (TerrainLocation)obj;
+        TerrainLocation comp = (TerrainLocation)obj;
 
-        // check hash first, quicker.
-        if (this.hashCode() != location.hashCode())
-            return false;
-
-        // hash collision fallback, slower.
-        return (this.x == location.getX() && this.z == location.getZ());
+        if (Integer.compare(x,comp.x) != 0) return false;
+        if (Integer.compare(z,comp.z) != 0) return false;
+        return true;
     }
 
     @Override

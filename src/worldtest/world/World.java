@@ -3,17 +3,20 @@ package worldtest.world;
 import com.jme3.app.SimpleApplication;
 import com.jme3.app.state.AbstractAppState;
 import com.jme3.bullet.PhysicsSpace;
-import com.jme3.material.Material;
 import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
-import com.jme3.terrain.geomipmap.TerrainQuad;
-import java.util.ArrayList;
+import java.io.Closeable;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public abstract class World extends AbstractAppState
+public abstract class World extends AbstractAppState implements Closeable
 {
     protected final SimpleApplication app;
     private final PhysicsSpace physicsSpace;
@@ -27,16 +30,19 @@ public abstract class World extends AbstractAppState
 
     protected float worldHeight = 1f;
 
-    
-
     private boolean isLoaded;
     private int totalVisibleChunks = 25;
-    private int locX, locZ, lastLocX = Integer.MAX_VALUE, lastLocZ = Integer.MAX_VALUE;
 
     protected TileListener tileListener;
 
-    // TODO: implement cache
-    protected final Map<TerrainLocation, TerrainQuad> worldTiles = new HashMap<TerrainLocation, TerrainQuad>();
+    private long cacheTime = 3000;
+
+    protected final Map<TerrainLocation, TerrainChunk> worldTiles = new HashMap<TerrainLocation, TerrainChunk>();
+    protected final Map<TerrainLocation, TerrainChunk> worldTilesCache = new HashMap<TerrainLocation, TerrainChunk>();
+    private Map<TerrainLocation, Future> worldTilesQue = new HashMap<TerrainLocation, Future>();
+
+
+    ScheduledThreadPoolExecutor threadpool = new ScheduledThreadPoolExecutor(2);
 
     public World(SimpleApplication app, PhysicsSpace physicsSpace, int tileSize, int blockSize)
     {
@@ -48,6 +54,8 @@ public abstract class World extends AbstractAppState
 
         this.bitshift = this.bitCalc(blockSize);
         this.positionAdjuster = (this.blockSize - 1) / 2;
+
+        threadpool.scheduleAtFixedRate(cacheValidator, 1000, 1000, TimeUnit.MILLISECONDS);
     }
 
     private int bitCalc(int blockSize)
@@ -65,6 +73,35 @@ public abstract class World extends AbstractAppState
 
         throw new IllegalArgumentException("Invalid block size specified.");
     }
+
+    public long getCacheTime() { return this.cacheTime; }
+
+    /**
+     * Set the time in which tiles are considered old enough to be
+     * removed from the cache.
+     *
+     * @param time time in milliseconds. (1000L = 1 second).
+     */
+    public void setCacheTime(long time) { this.cacheTime = time; }
+
+    private final Runnable cacheValidator = new Runnable()
+    {
+        @Override
+        public void run()
+        {
+            Iterator<Map.Entry<TerrainLocation, TerrainChunk>> iterator = worldTilesCache.entrySet().iterator();
+
+            while (iterator.hasNext())
+            {
+                Map.Entry<TerrainLocation, TerrainChunk> entry = iterator.next();
+
+                long time = System.currentTimeMillis() - entry.getValue().getCacheTime();
+
+                if (time >= cacheTime)
+                    iterator.remove();
+            }
+        }
+    };
 
     /**
      * Set the view distance in tiles for each direction according
@@ -115,6 +152,17 @@ public abstract class World extends AbstractAppState
         return this.worldTiles.size();
     }
 
+    public final int getCachedTilesCount()
+    {
+        return this.worldTilesCache.size();
+    }
+
+    public final int getQuedTilesCount()
+    {
+        return worldTilesQue.size();
+    }
+
+
     /**
      *
      * @return the maximum height of this world.
@@ -139,163 +187,163 @@ public abstract class World extends AbstractAppState
         this.tileListener = listener;
     }
 
-    private volatile boolean loadingFinished = true;
-    private void updateSurroundingArea(final int locX, final int locZ)
+
+
+    private boolean tileLoaded(TerrainChunk terrainChunk)
     {
-        if (!loadingFinished)
-            return;
+        if (this.tileListener != null)
+            return this.tileListener.tileLoaded(terrainChunk);
 
-        Thread thread = new Thread("Terrain Loading Thread")
+        return true;
+    }
+    public boolean tileUnloaded(TerrainChunk terrainChunk)
+    {
+        if (this.tileListener != null)
+            return this.tileListener.tileUnloaded(terrainChunk);
+
+        return true;
+    }
+
+    private boolean checkForOldChunks()
+    {
+        Iterator<Map.Entry<TerrainLocation, TerrainChunk>> iterator = worldTiles.entrySet().iterator();
+
+        while(iterator.hasNext())
         {
-            @Override
-            public void run()
+            Map.Entry<TerrainLocation, TerrainChunk> entry = iterator.next();
+            TerrainLocation location = entry.getKey();
+
+            if (location.getX() < topLx || location.getX() > botRx || location.getZ() < topLz || location.getZ() > botRz)
             {
-                loadingFinished = false;
+                TerrainChunk chunk = entry.getValue();
 
-                TerrainLocation tLoc = new TerrainLocation(locX, locZ);
-                List<TerrainLocation> surroundingChunkLocs = getSurroundingArea(tLoc);
+                chunk.setCacheTime();
+                worldTilesCache.put(location, chunk);
 
-                // remove all new tiles from the current tiles, leaving us with the tiles to remove.
-                List<TerrainLocation> oldTiles = new ArrayList<TerrainLocation>(worldTiles.keySet());
-                oldTiles.removeAll(surroundingChunkLocs);
 
-                // remove all the current tiles from the new tiles, leaving us with the tiles to load.
-                List<TerrainLocation> newTiles = new ArrayList<TerrainLocation>(surroundingChunkLocs);
-                newTiles.removeAll(worldTiles.keySet());
+                physicsSpace.remove(chunk);
+                int result = app.getRootNode().detachChild(chunk);
 
-                // this collection is only empty when the camera is first added to the world.
-                if (newTiles.isEmpty())
-                    newTiles = surroundingChunkLocs;
-
-                List<TerrainQuad> chunksToAdd = new ArrayList<TerrainQuad>();
-
-                for (int i = 0; i < newTiles.size(); i++)
+                if (result < 0)
                 {
-                    TerrainLocation thisChunkLoc = newTiles.get(i);
-
-                    TerrainQuad quad = getTerrainQuad(new TerrainLocation(thisChunkLoc.getX(), thisChunkLoc.getZ()));
-
-                    chunksToAdd.add(quad);
+                    String herp = "derp";
                 }
 
-                // a final collection of new tiles to load, and old tiles to remove.
-                final TerrainState newState = new TerrainState(chunksToAdd, oldTiles);
+                if (tileListener != null)
+                    tileListener.tileUnloaded(chunk);
 
-                // get back to the GL thread and carry out the tasks.
-                app.enqueue(new Callable<Boolean>()
+                iterator.remove();
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean checkForNewChunks()
+    {
+        // check all futures
+        if (worldTilesQue.isEmpty() == false)
+        {
+            Iterator<Map.Entry<TerrainLocation, Future>> iterator = worldTilesQue.entrySet().iterator();
+
+            while (iterator.hasNext())
+            {
+                Map.Entry<TerrainLocation, Future> entry = iterator.next();
+                Future future = entry.getValue();
+
+                if (future.isDone())
                 {
-                    public Boolean call() throws Exception
+                    try
                     {
-                        // remove old terrain first to keep triangle count down
-                        for (int i = 0; i < newState.getOldChunks().size(); i++)
-                        {
-                            TerrainLocation tLoc = newState.getOldChunks().get(i);
-                            TerrainQuad tq = worldTiles.get(tLoc);
+                        PendingChunk pending = (PendingChunk)future.get();
+                        worldTiles.put(pending.getLocation(), pending.getChunk());
+                        app.getRootNode().attachChild(pending.getChunk());
+                        physicsSpace.add(pending.getChunk());
 
-                            // push the unloaded event to the listener.
-                            boolean allowLoading = tileUnloaded(tq);
+                        if (tileListener != null)
+                            tileListener.tileLoaded(null);
 
-                            if (!allowLoading)
-                                continue;
+                        iterator.remove();
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.getLogger(World.class.getName()).log(Level.SEVERE, null, ex);
+                    }
 
-                            // remove chunk
-                            app.getRootNode().detachChild(tq);
+                    return true;
+                }
+            }
+        }
 
-                            physicsSpace.remove(tq);
-                            worldTiles.remove(tLoc);
-                        }
+        for (int x = topLx; x <= botRx; x++)
+        {
+            for (int z = topLz; z <= botRz; z++)
+            {
+                final TerrainLocation location = new TerrainLocation(x, z);
 
-                        // add new terrain
-                        for (int i = 0; i < newState.getNewChunks().size(); i++)
-                        {
-                            TerrainQuad tq = newState.getNewChunks().get(i);
+                if (worldTiles.get(location) != null)
+                    continue;
 
-                            int locX = (int)tq.getLocalTranslation().getX() >> bitshift;
-                            int locZ = (int)tq.getLocalTranslation().getZ() >> bitshift;
+                // check if it's already in the que.
+                if (worldTilesQue.get(location) != null)
+                    continue;
 
-                            TerrainLocation tLoc = new TerrainLocation(locX, locZ);
+                Future newChunk = threadpool.submit(new Callable<PendingChunk>()
+                {
+                    public PendingChunk call()
+                    {
+                        TerrainChunk newChunk = getTerrainChunk(location);
+                        PendingChunk pending = new PendingChunk(location, newChunk);
 
-                            // push the loaded event to the listener.
-                            boolean allowUnloading = tileLoaded(tq);
-
-                            if (!allowUnloading)
-                                continue;
-
-                            worldTiles.put(tLoc, tq);
-                            app.getRootNode().attachChild(tq);
-                            physicsSpace.add(tq);
-                        }
-
-                        return loadingFinished = true;
+                        return pending;
                     }
                 });
+
+                worldTilesQue.put(location, newChunk);
+                return true;
             }
-        };
+        }
 
-        thread.start();
+
+
+        return false;
     }
 
-    private boolean tileLoaded(TerrainQuad quad)
-    {
-        if (this.tileListener != null)
-            return this.tileListener.tileLoaded(quad);
-
-        return true;
-    }
-    public boolean tileUnloaded(TerrainQuad quad)
-    {
-        if (this.tileListener != null)
-            return this.tileListener.tileUnloaded(quad);
-
-        return true;
-    }
+    private int
+            locX, locZ,
+            topLx, topLz, botRx, botRz;
 
     @Override
     public void update(float tpf)
     {
-        // used to signify that the world is ready to join.
-        if (this.isLoaded == false && this.worldTiles.size() == this.totalVisibleChunks)
-            this.isLoaded = true;
-
-        // check if camera moved to another terrainquad
         float actualX = app.getCamera().getLocation().getX() + positionAdjuster;
         float actualZ = app.getCamera().getLocation().getZ() + positionAdjuster;
 
         locX = (int)actualX >> this.bitshift;
         locZ = (int)actualZ >> this.bitshift;
 
-        // if the camera hasnt moved, dont update the surrounding chunks.
-        if (locX == lastLocX && locZ == lastLocZ)
+        topLx = locX - wViewDistance;
+        topLz = locZ - nViewDistance;
+
+        botRx = locX + eViewDistance;
+        botRz = locZ + sViewDistance;
+
+        if (checkForOldChunks())
             return;
 
-       updateSurroundingArea(locX, locZ);
+        if (checkForNewChunks())
+            return;
 
-       lastLocX = locX;
-       lastLocZ = locZ;
+
+
     }
 
-    public abstract TerrainQuad getTerrainQuad(TerrainLocation location);
+    public abstract TerrainChunk getTerrainChunk(TerrainLocation location);
 
-    private List<TerrainLocation> getSurroundingArea(TerrainLocation chunkLoc)
-    {
-        int topLx = chunkLoc.getX() - wViewDistance;
-        int topLz = chunkLoc.getZ() - nViewDistance;
 
-        int botRx = chunkLoc.getX() + eViewDistance;
-        int botRz = chunkLoc.getZ() + sViewDistance;
-
-        List<TerrainLocation> results = new ArrayList<TerrainLocation>();
-
-        for (int x = topLx; x <= botRx; x++)
-        {
-            for (int z = topLz; z <= botRz; z++)
-            {
-                results.add(new TerrainLocation(x, z));
-            }
-        }
-
-        return results;
-    }
 
     /**
      *
@@ -309,7 +357,7 @@ public abstract class World extends AbstractAppState
 
         TerrainLocation tLoc = new TerrainLocation(tqLocX, tqLocZ);
 
-        TerrainQuad tq = this.worldTiles.get(tLoc);
+        TerrainChunk tq = this.worldTiles.get(tLoc);
 
         if (tq == null)
             return 0f;
@@ -320,6 +368,12 @@ public abstract class World extends AbstractAppState
         float height = tq.getHeightmapHeight(new Vector2f(tqPosX, tqPosZ));
 
         return height * this.worldHeight;
+    }
+
+    @Override
+    public void close()
+    {
+        threadpool.shutdown();
     }
 
 }

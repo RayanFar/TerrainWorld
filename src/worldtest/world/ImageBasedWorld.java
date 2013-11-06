@@ -8,7 +8,6 @@ import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.material.Material;
 import com.jme3.math.Vector3f;
 import com.jme3.terrain.geomipmap.TerrainLodControl;
-import com.jme3.terrain.geomipmap.TerrainQuad;
 import com.jme3.terrain.geomipmap.lodcalc.DistanceLodCalculator;
 import com.jme3.terrain.heightmap.AbstractHeightMap;
 import com.jme3.terrain.heightmap.ImageBasedHeightMap;
@@ -30,9 +29,14 @@ public class ImageBasedWorld extends World
     public final void setMaterial(Material material) { this.terrainMaterial = material; }
 
     @Override
-    public TerrainQuad getTerrainQuad(TerrainLocation location)
+    public TerrainChunk getTerrainChunk(TerrainLocation location)
     {
-        TerrainQuad tq = this.worldTiles.get(location);
+        TerrainChunk tq = this.worldTiles.get(location);
+
+        if (tq != null)
+            return tq;
+
+        tq = this.worldTilesCache.get(location);
 
         if (tq != null)
             return tq;
@@ -58,9 +62,9 @@ public class ImageBasedWorld extends World
             Arrays.fill(heightmap, 0f);
         }
 
-        String tqName = "TerrainQuad_" + location.getX() + "_" + location.getZ();
+        String tqName = "TerrainChunk_" + location.getX() + "_" + location.getZ();
 
-        tq = new TerrainQuad(tqName, this.tileSize, this.blockSize, heightmap);
+        tq = new TerrainChunk(tqName, this.tileSize, this.blockSize, heightmap);
         // tq.setLocalScale(new Vector3f(1f, this.worldHeight, 1f));
 
         // set position

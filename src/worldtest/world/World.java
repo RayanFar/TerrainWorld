@@ -5,11 +5,13 @@ import com.jme3.app.state.AbstractAppState;
 import com.jme3.bullet.PhysicsSpace;
 import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
+import com.jme3.renderer.queue.RenderQueue.ShadowMode;
 import java.io.Closeable;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -35,7 +37,7 @@ public abstract class World extends AbstractAppState implements Closeable
 
     protected TileListener tileListener;
 
-    private long cacheTime = 3000;
+    private long cacheTime = 5000;
 
     protected final Map<TerrainLocation, TerrainChunk> worldTiles = new HashMap<TerrainLocation, TerrainChunk>();
     protected final Map<TerrainLocation, TerrainChunk> worldTilesCache = new HashMap<TerrainLocation, TerrainChunk>();
@@ -122,7 +124,6 @@ public abstract class World extends AbstractAppState implements Closeable
         totalVisibleChunks = (wViewDistance + eViewDistance + 1) * (nViewDistance + sViewDistance + 1);
     }
 
-
     /**
      * Set the view distance in tiles for all directions.
      *
@@ -157,11 +158,15 @@ public abstract class World extends AbstractAppState implements Closeable
         return this.worldTilesCache.size();
     }
 
-    public final int getQuedTilesCount()
+    public final int getQuedGeneratingTilesCount()
     {
         return worldTilesQue.size();
     }
 
+    public final int getQuedGeneratedTilesCount()
+    {
+        return newTiles.size();
+    }
 
     /**
      *
@@ -186,8 +191,6 @@ public abstract class World extends AbstractAppState implements Closeable
     {
         this.tileListener = listener;
     }
-
-
 
     private boolean tileLoaded(TerrainChunk terrainChunk)
     {
@@ -220,14 +223,13 @@ public abstract class World extends AbstractAppState implements Closeable
                 chunk.setCacheTime();
                 worldTilesCache.put(location, chunk);
 
-
                 physicsSpace.remove(chunk);
                 app.getRootNode().detachChild(chunk);
 
-                iterator.remove();
+                // throw the tile unloaded event
+                this.tileUnloaded(chunk);
 
-                if (tileListener != null)
-                    tileListener.tileUnloaded(chunk);
+                iterator.remove();
 
                 return true;
             }
@@ -236,41 +238,29 @@ public abstract class World extends AbstractAppState implements Closeable
         return false;
     }
 
+    private final ConcurrentLinkedQueue<PendingChunk> newTiles = new ConcurrentLinkedQueue<PendingChunk>();
+
     private boolean checkForNewChunks()
     {
-        // check all futures
-        if (worldTilesQue.isEmpty() == false)
+        // tiles are always removed first to keep triangle count down, so we can
+        // safely assume this is a reasonable comparative.
+        if (worldTiles.size() == totalVisibleChunks)
         {
-            Iterator<Map.Entry<TerrainLocation, Future>> iterator = worldTilesQue.entrySet().iterator();
+            isLoaded = true;
+            return false;
+        }
 
-            while (iterator.hasNext())
-            {
-                Map.Entry<TerrainLocation, Future> entry = iterator.next();
-                Future future = entry.getValue();
+        PendingChunk pending = newTiles.poll();
 
-                if (future.isDone())
-                {
-                    try
-                    {
-                        PendingChunk pending = (PendingChunk)future.get();
-                        worldTiles.put(pending.getLocation(), pending.getChunk());
-                        app.getRootNode().attachChild(pending.getChunk());
-                        physicsSpace.add(pending.getChunk());
+        if (pending != null)
+        {
+            // pending.getChunk().setShadowMode(ShadowMode.Receive);
 
-                        if (tileListener != null)
-                            tileListener.tileLoaded(null);
+            worldTiles.put(pending.getLocation(), pending.getChunk());
+            app.getRootNode().attachChild(pending.getChunk());
+            physicsSpace.add(pending.getChunk());
 
-                        iterator.remove();
-                        return true;
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.getLogger(World.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-
-                    return true;
-                }
-            }
+            return true;
         }
         else
         {
@@ -294,18 +284,23 @@ public abstract class World extends AbstractAppState implements Closeable
                         physicsSpace.add(chunk);
                         worldTiles.put(location, chunk);
 
+                        // throw the TileLoaded event.
+                        tileLoaded(chunk);
+
                         return true;
                     }
                     else
                     {
-                        Future newChunk = threadpool.submit(new Callable<PendingChunk>()
+                        Future newChunk = threadpool.submit(new Runnable()
                         {
-                            public PendingChunk call()
+                            @Override
+                            public void run()
                             {
                                 TerrainChunk newChunk = getTerrainChunk(location);
                                 PendingChunk pending = new PendingChunk(location, newChunk);
 
-                                return pending;
+                                newTiles.add(pending);
+                                worldTilesQue.remove(location);
                             }
                         });
 
@@ -315,8 +310,6 @@ public abstract class World extends AbstractAppState implements Closeable
                 }
             }
         }
-
-
 
         return false;
     }
@@ -346,13 +339,9 @@ public abstract class World extends AbstractAppState implements Closeable
         if (checkForNewChunks())
             return;
 
-
-
     }
 
     public abstract TerrainChunk getTerrainChunk(TerrainLocation location);
-
-
 
     /**
      *

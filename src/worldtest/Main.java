@@ -47,7 +47,7 @@ public class Main extends SimpleApplication
         AppSettings settings = new AppSettings(true);
         settings.setResolution(1280, 720);
         settings.setFullscreen(false);
-        // settings.setFrameRate(10);
+        // settings.setFrameRate(20);
         app.setSettings(settings);
         app.start();
     }
@@ -67,7 +67,7 @@ public class Main extends SimpleApplication
         // 1mph = 0.44704f
         float camSpeed = 0.44704f * 100;
         // this.flyCam.setMoveSpeed(camSpeed);
-        this.flyCam.setMoveSpeed(camSpeed);
+        this.flyCam.setMoveSpeed(150);
 
         // display loading data
         initDebugInfo();

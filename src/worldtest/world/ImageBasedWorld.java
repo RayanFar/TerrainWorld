@@ -12,6 +12,9 @@ import com.jme3.terrain.geomipmap.lodcalc.DistanceLodCalculator;
 import com.jme3.terrain.heightmap.AbstractHeightMap;
 import com.jme3.terrain.heightmap.ImageBasedHeightMap;
 import com.jme3.texture.Texture;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.ObjectInputStream;
 import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -41,28 +44,47 @@ public class ImageBasedWorld extends World
         if (tq != null)
             return tq;
 
+        String tqName = "TerrainChunk_" + location.getX() + "_" + location.getZ();
+
         float[] heightmap = null;
 
-        // fire the imageHeightmapRequired event to obtain the image path
-        String imagePath = tileListener.imageHeightmapRequired(location.getX(), location.getZ());
+        File savedFile = new File("./world/" + tqName + ".chunk");
 
-        try
+        if (savedFile.exists())
         {
-            Texture hmapImage = app.getAssetManager().loadTexture(imagePath);
-            AbstractHeightMap map = new ImageBasedHeightMap(hmapImage.getImage());
-            map.load();
+            try
+            {
+                FileInputStream door = new FileInputStream(savedFile);
+                ObjectInputStream reader = new ObjectInputStream(door);
 
-            heightmap = map.getHeightMap();
+                heightmap = (float[])reader.readObject();
+            }
+            catch(Exception ex)
+            {
+                Logger.getLogger(NoiseBasedWorld.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
-        catch (AssetNotFoundException ex)
+        else
         {
-            Logger.getLogger("com.jme").log(Level.INFO, "Image not found: {0}", imagePath);
-            // The assetManager already logs null assets. don't re-iterate the point.
-            heightmap = new float[this.blockSize * this.blockSize];
-            Arrays.fill(heightmap, 0f);
-        }
+            // fire the imageHeightmapRequired event to obtain the image path
+            String imagePath = tileListener.imageHeightmapRequired(location.getX(), location.getZ());
 
-        String tqName = "TerrainChunk_" + location.getX() + "_" + location.getZ();
+            try
+            {
+                Texture hmapImage = app.getAssetManager().loadTexture(imagePath);
+                AbstractHeightMap map = new ImageBasedHeightMap(hmapImage.getImage());
+                map.load();
+
+                heightmap = map.getHeightMap();
+            }
+            catch (AssetNotFoundException ex)
+            {
+                Logger.getLogger("com.jme").log(Level.INFO, "Image not found: {0}", imagePath);
+                // The assetManager already logs null assets. don't re-iterate the point.
+                heightmap = new float[this.blockSize * this.blockSize];
+                Arrays.fill(heightmap, 0f);
+            }
+        }
 
         tq = new TerrainChunk(tqName, this.tileSize, this.blockSize, heightmap);
         // tq.setLocalScale(new Vector3f(1f, this.worldHeight, 1f));
@@ -78,11 +100,10 @@ public class ImageBasedWorld extends World
         tq.addControl(control);
 
         // add rigidity
-        tq.addControl(new RigidBodyControl(new HeightfieldCollisionShape(heightmap), 0));
+        tq.addControl(new RigidBodyControl(new HeightfieldCollisionShape(heightmap, tq.getLocalScale()), 0));
 
         tq.setMaterial(terrainMaterial);
         return tq;
-
 
     }
 

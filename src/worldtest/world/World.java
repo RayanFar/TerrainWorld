@@ -5,20 +5,18 @@ import com.jme3.app.state.AbstractAppState;
 import com.jme3.bullet.PhysicsSpace;
 import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
-import com.jme3.renderer.queue.RenderQueue.ShadowMode;
 import java.io.Closeable;
+import java.io.File;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public abstract class World extends AbstractAppState implements Closeable
 {
@@ -42,9 +40,7 @@ public abstract class World extends AbstractAppState implements Closeable
     private long cacheTime = 5000;
 
     protected final Map<TerrainLocation, TerrainChunk> worldTiles = new HashMap<TerrainLocation, TerrainChunk>();
-    protected final Map<TerrainLocation, TerrainChunk> worldTilesCache = new HashMap<TerrainLocation, TerrainChunk>();
-
-
+    protected final Map<TerrainLocation, TerrainChunk> worldTilesCache = new ConcurrentHashMap<TerrainLocation, TerrainChunk>();
 
     ScheduledThreadPoolExecutor threadpool = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors() * 2);
 
@@ -58,6 +54,12 @@ public abstract class World extends AbstractAppState implements Closeable
 
         this.bitshift = this.bitCalc(blockSize);
         this.positionAdjuster = (this.blockSize - 1) / 2;
+
+        File dir = new File("./world/");
+        if (!dir.exists())
+        {
+            dir.mkdirs();
+        }
 
         threadpool.scheduleAtFixedRate(cacheValidator, 1000, 1000, TimeUnit.MILLISECONDS);
     }
@@ -263,6 +265,9 @@ public abstract class World extends AbstractAppState implements Closeable
             app.getRootNode().attachChild(pending.getChunk());
             physicsSpace.add(pending.getChunk());
 
+            // throw the TileLoaded event.
+            tileLoaded(pending.getChunk());
+
             return true;
         }
         else
@@ -273,7 +278,7 @@ public abstract class World extends AbstractAppState implements Closeable
                 {
                     final TerrainLocation location = new TerrainLocation(x, z);
 
-                    // its already loaded.
+                    // check its already loaded.
                     if (worldTiles.get(location) != null)
                         continue;
 
@@ -392,5 +397,4 @@ public abstract class World extends AbstractAppState implements Closeable
     {
         threadpool.shutdown();
     }
-
 }

@@ -9,7 +9,12 @@ import com.jme3.math.Vector3f;
 import com.jme3.terrain.geomipmap.TerrainLodControl;
 import com.jme3.terrain.geomipmap.lodcalc.DistanceLodCalculator;
 import com.jme3.terrain.noise.basis.FilteredBasis;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.ObjectInputStream;
 import java.nio.FloatBuffer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 
 public class NoiseBasedWorld extends World
@@ -20,6 +25,8 @@ public class NoiseBasedWorld extends World
     public NoiseBasedWorld(SimpleApplication app, PhysicsSpace physicsSpace, int tileSize, int blockSize)
     {
         super(app, physicsSpace, tileSize, blockSize);
+
+
     }
 
     public final Material getMaterial() { return this.terrainMaterial; }
@@ -43,7 +50,29 @@ public class NoiseBasedWorld extends World
 
         String tqName = "TerrainChunk_" + location.getX() + "_" + location.getZ();
 
-        float[] heightmap = getHeightmap(location);
+        float[] heightmap = null;
+
+        File savedFile = new File("./world/" + tqName + ".chunk");
+
+        if (savedFile.exists())
+        {
+            try
+            {
+                FileInputStream door = new FileInputStream(savedFile);
+                ObjectInputStream reader = new ObjectInputStream(door);
+
+                heightmap = (float[])reader.readObject();
+            }
+            catch(Exception ex)
+            {
+                Logger.getLogger(NoiseBasedWorld.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+        else
+        {
+            heightmap = getHeightmap(location);
+        }
+
         tq = new TerrainChunk(tqName, this.tileSize, this.blockSize, heightmap);
         tq.setLocalScale(new Vector3f(1f, this.worldHeight, 1f));
 
@@ -58,7 +87,7 @@ public class NoiseBasedWorld extends World
         tq.addControl(control);
 
         // add rigidity
-        tq.addControl(new RigidBodyControl(new HeightfieldCollisionShape(heightmap), 0));
+        tq.addControl(new RigidBodyControl(new HeightfieldCollisionShape(heightmap, tq.getLocalScale()), 0));
 
         tq.setMaterial(terrainMaterial);
         return tq;
@@ -70,7 +99,4 @@ public class NoiseBasedWorld extends World
         FloatBuffer buffer = this.filteredBasis.getBuffer(x * (this.blockSize - 1), z * (this.blockSize - 1), 0, this.blockSize);
         return buffer.array();
     }
-
-
-
 }

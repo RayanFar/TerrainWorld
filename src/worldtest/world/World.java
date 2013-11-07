@@ -8,8 +8,10 @@ import com.jme3.math.Vector3f;
 import com.jme3.renderer.queue.RenderQueue.ShadowMode;
 import java.io.Closeable;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Future;
@@ -41,7 +43,7 @@ public abstract class World extends AbstractAppState implements Closeable
 
     protected final Map<TerrainLocation, TerrainChunk> worldTiles = new HashMap<TerrainLocation, TerrainChunk>();
     protected final Map<TerrainLocation, TerrainChunk> worldTilesCache = new HashMap<TerrainLocation, TerrainChunk>();
-    private Map<TerrainLocation, Future> worldTilesQue = new HashMap<TerrainLocation, Future>();
+
 
 
     ScheduledThreadPoolExecutor threadpool = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors() * 2);
@@ -238,6 +240,7 @@ public abstract class World extends AbstractAppState implements Closeable
         return false;
     }
 
+    private Set<TerrainLocation> worldTilesQue = new HashSet<TerrainLocation>();
     private final ConcurrentLinkedQueue<PendingChunk> newTiles = new ConcurrentLinkedQueue<PendingChunk>();
 
     private boolean checkForNewChunks()
@@ -274,7 +277,7 @@ public abstract class World extends AbstractAppState implements Closeable
                         continue;
 
                     // check if it's already in the que.
-                    if (worldTilesQue.get(location) != null)
+                    if (worldTilesQue.contains(location))
                         continue;
 
                     TerrainChunk chunk = worldTilesCache.get(location);
@@ -291,7 +294,9 @@ public abstract class World extends AbstractAppState implements Closeable
                     }
                     else
                     {
-                        Future newChunk = threadpool.submit(new Runnable()
+                        worldTilesQue.add(location);
+
+                        threadpool.submit(new Runnable()
                         {
                             @Override
                             public void run()
@@ -300,11 +305,22 @@ public abstract class World extends AbstractAppState implements Closeable
                                 PendingChunk pending = new PendingChunk(location, newChunk);
 
                                 newTiles.add(pending);
-                                worldTilesQue.remove(location);
+
+                                // thread safety...
+                                app.enqueue(new Callable<Boolean>()
+                                {
+                                    public Boolean call()
+                                    {
+                                        worldTilesQue.remove(location);
+                                        return true;
+                                    }
+                                });
+
+
                             }
                         });
 
-                        worldTilesQue.put(location, newChunk);
+
                         return true;
                     }
                 }

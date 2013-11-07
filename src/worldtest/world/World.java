@@ -249,12 +249,12 @@ public abstract class World extends AbstractAppState implements Closeable
         // safely assume this is a reasonable comparative.
         if (worldTiles.size() == totalVisibleChunks)
         {
-            isLoaded = true;
+            isLoaded = true; // used to determine whether the player can join the world.
             return false;
         }
 
+        // check if any requested tiles are ready to be added.
         PendingChunk pending = newTiles.poll();
-
         if (pending != null)
         {
             // pending.getChunk().setShadowMode(ShadowMode.Receive);
@@ -273,6 +273,7 @@ public abstract class World extends AbstractAppState implements Closeable
                 {
                     final TerrainLocation location = new TerrainLocation(x, z);
 
+                    // its already loaded.
                     if (worldTiles.get(location) != null)
                         continue;
 
@@ -280,6 +281,7 @@ public abstract class World extends AbstractAppState implements Closeable
                     if (worldTilesQue.contains(location))
                         continue;
 
+                    // check if its in the cache.
                     TerrainChunk chunk = worldTilesCache.get(location);
                     if (chunk != null)
                     {
@@ -294,6 +296,7 @@ public abstract class World extends AbstractAppState implements Closeable
                     }
                     else
                     {
+                        // its nowhere to be seen, generate it.
                         worldTilesQue.add(location);
 
                         threadpool.submit(new Runnable()
@@ -315,11 +318,8 @@ public abstract class World extends AbstractAppState implements Closeable
                                         return true;
                                     }
                                 });
-
-
                             }
                         });
-
 
                         return true;
                     }
@@ -348,6 +348,9 @@ public abstract class World extends AbstractAppState implements Closeable
 
         botRx = locX + eViewDistance;
         botRz = locZ + sViewDistance;
+
+        // if something occured, these methods return true.
+        // this stops many things occuring all in one frame.
 
         if (checkForOldChunks())
             return;

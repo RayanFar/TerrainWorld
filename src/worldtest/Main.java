@@ -64,7 +64,10 @@ public class Main extends SimpleApplication
         // bulletAppState.setThreadingType(BulletAppState.ThreadingType.PARALLEL);
         stateManager.attach(bulletAppState);
 
-        this.flyCam.setMoveSpeed(300);
+        // 1mph = 0.44704f
+        float camSpeed = 0.44704f * 100;
+        // this.flyCam.setMoveSpeed(camSpeed);
+        this.flyCam.setMoveSpeed(camSpeed);
 
         // display loading data
         initDebugInfo();
@@ -135,7 +138,7 @@ public class Main extends SimpleApplication
 
         newWorld.setWorldHeight(192f);
 
-        newWorld.setViewDistance(2);
+        newWorld.setViewDistance(3);
         // newWorld.setViewDistance(14, 1, 2, 1);
 
         newWorld.setCacheTime(5000);
@@ -149,7 +152,7 @@ public class Main extends SimpleApplication
         base.setRoughness(0.7f);
         base.setFrequency(1.0f);
         base.setAmplitude(1.0f);
-        base.setLacunarity(2.12f);
+        base.setLacunarity(3.12f);
         base.setOctaves(8);
         base.setScale(0.02125f);
         base.addModulator(new NoiseModulator()
@@ -192,7 +195,7 @@ public class Main extends SimpleApplication
 
         newWorld.setWorldHeight(192f);
 
-        newWorld.setViewDistance(2);
+        newWorld.setViewDistance(3);
         // newWorld.setViewDistance(14, 1, 2, 1);
 
         Material terrainMaterial = createTerrainMaterial();
@@ -220,7 +223,6 @@ public class Main extends SimpleApplication
 
         newWorld.setTileListener(tileListener);
 
-
         this.world = newWorld;
     }
 
@@ -243,16 +245,28 @@ public class Main extends SimpleApplication
                 .append("\n")
                 .append("Cached: ").append(world.getCachedTilesCount())
                 .append("\n")
-                .append("Qued: ").append(world.getQuedTilesCount());
+                .append("Generating: ").append(world.getQuedGeneratingTilesCount())
+                .append("\n")
+                .append("Adding: ").append(world.getQuedGeneratedTilesCount());
 
 
         hudText.setText(sb.toString());
     }
 
+    private boolean hasJoined = false;
+
     @Override
     public void simpleUpdate(float tpf)
     {
         displayDebugInfo();
+
+        if (world.isLoaded() == false || hasJoined)
+            return;
+
+        hasJoined = true;
+
+        float height = world.getHeight(new Vector3f(0, 0, 0));
+        this.getCamera().setLocation(new Vector3f(0, height + 2, 0));
     }
 
     @Override

@@ -372,7 +372,7 @@ public abstract class World extends AbstractAppState implements Closeable
         botRz = locZ + sViewDistance;
 
         // if the last frame took longer than 1/120 (120fps) give this frame a break.
-        boolean frameDelayed = (tpf < 0.083f);
+        boolean frameDelayed = (tpf > 0.083f);
 
         if (checkForOldChunks() && frameDelayed)
             return;

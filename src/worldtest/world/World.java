@@ -43,7 +43,7 @@ public abstract class World extends AbstractAppState implements Closeable
     protected final Map<TerrainLocation, TerrainChunk> worldTiles = new HashMap<TerrainLocation, TerrainChunk>();
     protected final Map<TerrainLocation, TerrainChunk> worldTilesCache = new ConcurrentHashMap<TerrainLocation, TerrainChunk>();
 
-    ScheduledThreadPoolExecutor threadpool = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors() * 3);
+    ScheduledThreadPoolExecutor threadpool = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
 
     public World(SimpleApplication app, PhysicsSpace physicsSpace, int tileSize, int blockSize)
     {
@@ -247,7 +247,8 @@ public abstract class World extends AbstractAppState implements Closeable
         return false;
     }
 
-    private Set<TerrainLocation> worldTilesQue = new HashSet<TerrainLocation>();
+    // private Set<TerrainLocation> worldTilesQue = new HashSet<TerrainLocation>();
+    private final Set<TerrainLocation> worldTilesQue = new HashSet<TerrainLocation>();
     private final ConcurrentLinkedQueue<PendingChunk> newTiles = new ConcurrentLinkedQueue<PendingChunk>();
 
     private boolean checkForNewChunks()
@@ -264,17 +265,14 @@ public abstract class World extends AbstractAppState implements Closeable
         PendingChunk pending = newTiles.poll();
         if (pending != null)
         {
-            // throw the TileLoaded event.
-            // check if the tile load has been cancelled.
+            // throw the TileLoaded event & check if the tile load has been cancelled.
             if (!tileLoaded(pending.getChunk()))
                 return false;
 
-            // pending.getChunk().setShadowMode(ShadowMode.Receive);
-
-            // TerrainLodControl lodControl = new TerrainLodControl(pending.getChunk(), app.getCamera();
             ModifiedTerrainLodControl lodControl = new ModifiedTerrainLodControl(pending.getChunk(), app.getCamera(), threadpool);
             pending.getChunk().addControl(lodControl);
 
+            // pending.getChunk().setShadowMode(ShadowMode.Receive);
             worldTiles.put(pending.getLocation(), pending.getChunk());
             app.getRootNode().attachChild(pending.getChunk());
             physicsSpace.add(pending.getChunk());
@@ -301,12 +299,10 @@ public abstract class World extends AbstractAppState implements Closeable
                     TerrainChunk chunk = worldTilesCache.get(location);
                     if (chunk != null)
                     {
-                        // throw the TileLoaded event.
-                        // check if the tile load has been cancelled.
+                        // throw the TileLoaded event & check if the tile load has been cancelled.
                         if (!tileLoaded(chunk))
                             return false;
 
-                        // TerrainLodControl lodControl = new TerrainLodControl(chunk, app.getCamera());
                         ModifiedTerrainLodControl lodControl = new ModifiedTerrainLodControl(chunk, app.getCamera(), threadpool);
                         chunk.addControl(lodControl);
 
@@ -352,18 +348,31 @@ public abstract class World extends AbstractAppState implements Closeable
         return false;
     }
 
+    private float actualX, actualZ;
     private int
             locX, locZ,
+            oldLocX = Integer.MAX_VALUE, oldLocZ = Integer.MAX_VALUE,
             topLx, topLz, botRx, botRz;
+
+
+
+    private boolean chunkChanged;
 
     @Override
     public void update(float tpf)
     {
-        float actualX = app.getCamera().getLocation().getX() + positionAdjuster;
-        float actualZ = app.getCamera().getLocation().getZ() + positionAdjuster;
+        actualX = (int)(app.getCamera().getLocation().getX() + positionAdjuster);
+        actualZ = (int)(app.getCamera().getLocation().getZ() + positionAdjuster);
 
         locX = (int)actualX >> this.bitshift;
         locZ = (int)actualZ >> this.bitshift;
+
+        // if the last recored locations are the same as the new locations
+        // and all que's are empty, dont bother checking for new or old tiles
+        if ((locX == oldLocX) && (locZ == oldLocZ) && worldTilesQue.isEmpty() && newTiles.isEmpty())
+        {
+            return;
+        }
 
         topLx = locX - wViewDistance;
         topLz = locZ - nViewDistance;
@@ -371,15 +380,17 @@ public abstract class World extends AbstractAppState implements Closeable
         botRx = locX + eViewDistance;
         botRz = locZ + sViewDistance;
 
-        // if the last frame took longer than 1/120 (120fps) give this frame a break.
-        boolean frameDelayed = (tpf > 0.083f);
-
-        if (checkForOldChunks() && frameDelayed)
+        if (checkForOldChunks())
             return;
 
-        if (checkForNewChunks() && frameDelayed)
+        if (checkForNewChunks())
             return;
 
+        if (worldTilesQue.isEmpty() && newTiles.isEmpty())
+        {
+            oldLocX = locX;
+            oldLocZ = locZ;
+        }
     }
 
     public abstract TerrainChunk getTerrainChunk(TerrainLocation location);

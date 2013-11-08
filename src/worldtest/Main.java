@@ -47,7 +47,8 @@ public class Main extends SimpleApplication
         AppSettings settings = new AppSettings(true);
         settings.setResolution(1280, 720);
         settings.setFullscreen(false);
-        // settings.setFrameRate(20);
+        // settings.setVSync(true);
+        // settings.setFrameRate(300);
         app.setSettings(settings);
         app.start();
     }
@@ -194,7 +195,7 @@ public class Main extends SimpleApplication
 
         newWorld.setWorldHeight(192f);
 
-        newWorld.setViewDistance(3);
+        newWorld.setViewDistance(2);
         // newWorld.setViewDistance(14, 1, 2, 1);
 
         Material terrainMaterial = createTerrainMaterial();

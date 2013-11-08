@@ -1,6 +1,7 @@
 package worldtest.world;
 
 import com.jme3.scene.Node;
+import com.jme3.terrain.geomipmap.TerrainLodControl;
 import com.jme3.terrain.geomipmap.TerrainQuad;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -15,6 +16,8 @@ public class TerrainChunk extends TerrainQuad
 
     private Node staticRigidObjects;
     private Node staticNonRigidObjects;
+
+    private TerrainLodControl lodControl;
 
     public TerrainChunk(String name, int patchSize, int totalSize, float[] heightmap)
     {

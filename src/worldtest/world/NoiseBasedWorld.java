@@ -6,8 +6,6 @@ import com.jme3.bullet.collision.shapes.HeightfieldCollisionShape;
 import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.material.Material;
 import com.jme3.math.Vector3f;
-import com.jme3.terrain.geomipmap.TerrainLodControl;
-import com.jme3.terrain.geomipmap.lodcalc.DistanceLodCalculator;
 import com.jme3.terrain.noise.basis.FilteredBasis;
 import java.io.File;
 import java.io.FileInputStream;
@@ -82,9 +80,10 @@ public class NoiseBasedWorld extends World
         tq.setLocalTranslation(new Vector3f(tqLocX, 0, tqLoxZ));
 
         // add LOD
-        TerrainLodControl control = new TerrainLodControl(tq, app.getCamera());
-        control.setLodCalculator( new DistanceLodCalculator(this.tileSize, 2.7f));
-        tq.addControl(control);
+        // TerrainLodControl control = new TerrainLodControl(tq, app.getCamera());
+        // control.setLodCalculator( new DistanceLodCalculator(this.tileSize, 2.7f));
+        // tq.addControl(control);
+        // tq.setLodControl(control);
 
         // add rigidity
         tq.addControl(new RigidBodyControl(new HeightfieldCollisionShape(heightmap, tq.getLocalScale()), 0));

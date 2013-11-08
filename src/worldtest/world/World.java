@@ -5,6 +5,7 @@ import com.jme3.app.state.AbstractAppState;
 import com.jme3.bullet.PhysicsSpace;
 import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
+import com.jme3.terrain.geomipmap.TerrainLodControl;
 import java.io.Closeable;
 import java.io.File;
 import java.util.HashMap;
@@ -224,14 +225,18 @@ public abstract class World extends AbstractAppState implements Closeable
             {
                 TerrainChunk chunk = entry.getValue();
 
+                // throw the tile unloaded event
+                // check if the tile unload has been cancelled
+                if (!this.tileUnloaded(chunk))
+                    return false;
+
                 chunk.setCacheTime();
                 worldTilesCache.put(location, chunk);
 
+                chunk.getControl(TerrainLodControl.class).detachAndCleanUpControl();
+
                 physicsSpace.remove(chunk);
                 app.getRootNode().detachChild(chunk);
-
-                // throw the tile unloaded event
-                this.tileUnloaded(chunk);
 
                 iterator.remove();
 
@@ -259,14 +264,19 @@ public abstract class World extends AbstractAppState implements Closeable
         PendingChunk pending = newTiles.poll();
         if (pending != null)
         {
+            // throw the TileLoaded event.
+            // check if the tile load has been cancelled.
+            if (!tileLoaded(pending.getChunk()))
+                return false;
+
             // pending.getChunk().setShadowMode(ShadowMode.Receive);
+
+            TerrainLodControl lodControl = new TerrainLodControl(pending.getChunk(), app.getCamera());
+            pending.getChunk().addControl(lodControl);
 
             worldTiles.put(pending.getLocation(), pending.getChunk());
             app.getRootNode().attachChild(pending.getChunk());
             physicsSpace.add(pending.getChunk());
-
-            // throw the TileLoaded event.
-            tileLoaded(pending.getChunk());
 
             return true;
         }
@@ -290,12 +300,17 @@ public abstract class World extends AbstractAppState implements Closeable
                     TerrainChunk chunk = worldTilesCache.get(location);
                     if (chunk != null)
                     {
+                        // throw the TileLoaded event.
+                        // check if the tile load has been cancelled.
+                        if (!tileLoaded(chunk))
+                            return false;
+
+                        TerrainLodControl lodControl = new TerrainLodControl(chunk, app.getCamera());
+                        chunk.addControl(lodControl);
+
                         app.getRootNode().attachChild(chunk);
                         physicsSpace.add(chunk);
                         worldTiles.put(location, chunk);
-
-                        // throw the TileLoaded event.
-                        tileLoaded(chunk);
 
                         return true;
                     }
@@ -354,13 +369,13 @@ public abstract class World extends AbstractAppState implements Closeable
         botRx = locX + eViewDistance;
         botRz = locZ + sViewDistance;
 
-        // if something occured, these methods return true.
-        // this stops many things occuring all in one frame.
+        // if the last frame took longer than 1/120 (120fps) give this frame a break.
+        boolean frameDelayed = (tpf < 0.083f);
 
-        if (checkForOldChunks())
+        if (checkForOldChunks() && frameDelayed)
             return;
 
-        if (checkForNewChunks())
+        if (checkForNewChunks() && frameDelayed)
             return;
 
     }

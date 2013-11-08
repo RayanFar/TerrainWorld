@@ -202,7 +202,7 @@ public class ModifiedTerrainLodControl extends AbstractControl
         }
         setLodCalcRunning(true);
 
-        if (executor == null && threadpool == null)
+        if (threadpool == null && executor == null)
             executor = createExecutorService();
 
         prepareTerrain();

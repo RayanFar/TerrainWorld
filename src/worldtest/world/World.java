@@ -5,7 +5,7 @@ import com.jme3.app.state.AbstractAppState;
 import com.jme3.bullet.PhysicsSpace;
 import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
-import com.jme3.terrain.geomipmap.TerrainLodControl;
+import com.jme3.terrain.geomipmap.ModifiedTerrainLodControl;
 import java.io.Closeable;
 import java.io.File;
 import java.util.HashMap;
@@ -43,7 +43,7 @@ public abstract class World extends AbstractAppState implements Closeable
     protected final Map<TerrainLocation, TerrainChunk> worldTiles = new HashMap<TerrainLocation, TerrainChunk>();
     protected final Map<TerrainLocation, TerrainChunk> worldTilesCache = new ConcurrentHashMap<TerrainLocation, TerrainChunk>();
 
-    ScheduledThreadPoolExecutor threadpool = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors() * 2);
+    ScheduledThreadPoolExecutor threadpool = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors() * 3);
 
     public World(SimpleApplication app, PhysicsSpace physicsSpace, int tileSize, int blockSize)
     {
@@ -233,7 +233,7 @@ public abstract class World extends AbstractAppState implements Closeable
                 chunk.setCacheTime();
                 worldTilesCache.put(location, chunk);
 
-                chunk.getControl(TerrainLodControl.class).detachAndCleanUpControl();
+                // chunk.getControl(TerrainLodControl.class).detachAndCleanUpControl();
 
                 physicsSpace.remove(chunk);
                 app.getRootNode().detachChild(chunk);
@@ -271,7 +271,8 @@ public abstract class World extends AbstractAppState implements Closeable
 
             // pending.getChunk().setShadowMode(ShadowMode.Receive);
 
-            TerrainLodControl lodControl = new TerrainLodControl(pending.getChunk(), app.getCamera());
+            // TerrainLodControl lodControl = new TerrainLodControl(pending.getChunk(), app.getCamera();
+            ModifiedTerrainLodControl lodControl = new ModifiedTerrainLodControl(pending.getChunk(), app.getCamera(), threadpool);
             pending.getChunk().addControl(lodControl);
 
             worldTiles.put(pending.getLocation(), pending.getChunk());
@@ -305,7 +306,8 @@ public abstract class World extends AbstractAppState implements Closeable
                         if (!tileLoaded(chunk))
                             return false;
 
-                        TerrainLodControl lodControl = new TerrainLodControl(chunk, app.getCamera());
+                        // TerrainLodControl lodControl = new TerrainLodControl(chunk, app.getCamera());
+                        ModifiedTerrainLodControl lodControl = new ModifiedTerrainLodControl(chunk, app.getCamera(), threadpool);
                         chunk.addControl(lodControl);
 
                         app.getRootNode().attachChild(chunk);

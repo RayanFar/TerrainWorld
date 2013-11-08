@@ -66,7 +66,7 @@ public class Main extends SimpleApplication
 
         // 1mph = 0.44704f
         float camSpeed = 0.44704f * 100;
-        this.flyCam.setMoveSpeed(camSpeed);
+        this.flyCam.setMoveSpeed(300);
 
         // display loading data
         initDebugInfo();

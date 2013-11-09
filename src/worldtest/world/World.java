@@ -62,7 +62,7 @@ public abstract class World extends AbstractAppState implements Closeable
             dir.mkdirs();
         }
 
-        threadpool.scheduleAtFixedRate(cacheValidator, 1000, 1000, TimeUnit.MILLISECONDS);
+        // threadpool.scheduleAtFixedRate(cacheValidator, 1000, 1000, TimeUnit.MILLISECONDS);
     }
 
     private int bitCalc(int blockSize)
@@ -91,7 +91,7 @@ public abstract class World extends AbstractAppState implements Closeable
      */
     public void setCacheTime(long time) { this.cacheTime = time; }
 
-    private final Runnable cacheValidator = new Runnable()
+    /* private final Runnable cacheValidator = new Runnable()
     {
         @Override
         public void run()
@@ -108,7 +108,7 @@ public abstract class World extends AbstractAppState implements Closeable
                     iterator.remove();
             }
         }
-    };
+    }; */
 
     /**
      * Set the view distance in tiles for each direction according
@@ -230,8 +230,8 @@ public abstract class World extends AbstractAppState implements Closeable
                 if (!this.tileUnloaded(chunk))
                     return false;
 
-                chunk.setCacheTime();
-                worldTilesCache.put(location, chunk);
+                // chunk.setCacheTime();
+                // worldTilesCache.put(location, chunk);
 
                 // chunk.getControl(TerrainLodControl.class).detachAndCleanUpControl();
 
@@ -348,15 +348,79 @@ public abstract class World extends AbstractAppState implements Closeable
         return false;
     }
 
+    private volatile boolean cacheInterrupted;
+    private void recalculateCache()
+    {
+        worldTilesCache.clear();
+        cacheInterrupted = false;
+
+        Runnable cacheUpdater = new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                // top and bottom
+                for (int x = (topLx -1); x <= (botRx + 1); x++)
+                {
+                    if (cacheInterrupted) return;
+
+                    // top
+                    final TerrainLocation topLocation = new TerrainLocation(x, topLz - 1);
+                    final TerrainChunk topChunk = getTerrainChunk(topLocation);
+
+                    // bottom
+                    final TerrainLocation bottomLocation = new TerrainLocation(x, botRz + 1);
+                    final TerrainChunk bottomChunk = getTerrainChunk(bottomLocation);
+
+                    app.enqueue(new Callable<Boolean>()
+                    {
+                        public Boolean call()
+                        {
+                            worldTilesCache.put(topLocation, topChunk);
+                            worldTilesCache.put(bottomLocation, bottomChunk);
+                            return true;
+                        }
+                    });
+                }
+
+                // sides
+                for (int z = topLz; z <= botRz; z++)
+                {
+                    if (cacheInterrupted) return;
+
+                    // left
+                    final TerrainLocation leftLocation = new TerrainLocation(topLx - 1, z);
+                    final TerrainChunk leftChunk = getTerrainChunk(leftLocation);
+
+                    // right
+                    final TerrainLocation rightLocation = new TerrainLocation(botRx + 1, z);
+                    final TerrainChunk rightChunk = getTerrainChunk(rightLocation);
+
+
+
+                    app.enqueue(new Callable<Boolean>()
+                    {
+                        public Boolean call()
+                        {
+                            worldTilesCache.put(leftLocation, leftChunk);
+                            worldTilesCache.put(rightLocation, rightChunk);
+
+                            return true;
+                        }
+                    });
+                }
+
+            }
+        };
+
+        threadpool.execute(cacheUpdater);
+    }
+
     private float actualX, actualZ;
     private int
             locX, locZ,
             oldLocX = Integer.MAX_VALUE, oldLocZ = Integer.MAX_VALUE,
             topLx, topLz, botRx, botRz;
-
-
-
-    private boolean chunkChanged;
 
     @Override
     public void update(float tpf)
@@ -388,6 +452,9 @@ public abstract class World extends AbstractAppState implements Closeable
 
         if (worldTilesQue.isEmpty() && newTiles.isEmpty())
         {
+            cacheInterrupted = true;
+            recalculateCache();
+
             oldLocX = locX;
             oldLocZ = locZ;
         }

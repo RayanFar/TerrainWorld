@@ -41,4 +41,10 @@ public final class TerrainLocation
         hash = 97 * hash + this.z;
         return hash;
     }
+
+    @Override
+    public String toString()
+    {
+        return x + ", " + z;
+    }
 }

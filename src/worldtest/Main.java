@@ -67,7 +67,7 @@ public class Main extends SimpleApplication
 
         // 1mph = 0.44704f
         float camSpeed = 0.44704f * 100;
-        this.flyCam.setMoveSpeed(300);
+        this.flyCam.setMoveSpeed(150);
 
         // display loading data
         initDebugInfo();
@@ -138,7 +138,7 @@ public class Main extends SimpleApplication
 
         newWorld.setWorldHeight(192f);
 
-        newWorld.setViewDistance(3);
+        newWorld.setViewDistance(2);
         // newWorld.setViewDistance(14, 1, 2, 1);
 
         newWorld.setCacheTime(5000);
@@ -195,7 +195,7 @@ public class Main extends SimpleApplication
 
         newWorld.setWorldHeight(192f);
 
-        newWorld.setViewDistance(2);
+        newWorld.setViewDistance(3);
         // newWorld.setViewDistance(14, 1, 2, 1);
 
         Material terrainMaterial = createTerrainMaterial();

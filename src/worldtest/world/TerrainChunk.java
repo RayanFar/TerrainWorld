@@ -1,7 +1,6 @@
 package worldtest.world;
 
 import com.jme3.scene.Node;
-import com.jme3.terrain.geomipmap.TerrainLodControl;
 import com.jme3.terrain.geomipmap.TerrainQuad;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -12,12 +11,8 @@ import java.util.logging.Logger;
 
 public class TerrainChunk extends TerrainQuad
 {
-    private long cacheTime;
-
     private Node staticRigidObjects;
     private Node staticNonRigidObjects;
-
-    private TerrainLodControl lodControl;
 
     public TerrainChunk(String name, int patchSize, int totalSize, float[] heightmap)
     {
@@ -37,8 +32,11 @@ public class TerrainChunk extends TerrainQuad
         }
     }
 
-    public long getCacheTime() { return this.cacheTime; }
-    public void setCacheTime() { this.cacheTime = System.currentTimeMillis(); }
+    public Node getStaticRigidObjectsNode() { return this.staticRigidObjects; }
+    public void setStaticRigidObjectsNode(Node node) { this.staticRigidObjects = node; }
+
+    public Node getStaticNonRigidObjectsNode() { return this.staticNonRigidObjects; }
+    public void getStaticNonRigidObjectsNode(Node node) { this.staticNonRigidObjects = node; }
 
     public void save() throws IOException
     {

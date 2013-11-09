@@ -6,6 +6,7 @@ import com.jme3.bullet.PhysicsSpace;
 import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
 import com.jme3.terrain.geomipmap.ModifiedTerrainLodControl;
+import com.jme3.terrain.geomipmap.lodcalc.DistanceLodCalculator;
 import java.io.Closeable;
 import java.io.File;
 import java.util.HashMap;
@@ -17,7 +18,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 public abstract class World extends AbstractAppState implements Closeable
 {
@@ -61,8 +61,6 @@ public abstract class World extends AbstractAppState implements Closeable
         {
             dir.mkdirs();
         }
-
-        // threadpool.scheduleAtFixedRate(cacheValidator, 1000, 1000, TimeUnit.MILLISECONDS);
     }
 
     private int bitCalc(int blockSize)
@@ -91,24 +89,6 @@ public abstract class World extends AbstractAppState implements Closeable
      */
     public void setCacheTime(long time) { this.cacheTime = time; }
 
-    /* private final Runnable cacheValidator = new Runnable()
-    {
-        @Override
-        public void run()
-        {
-            Iterator<Map.Entry<TerrainLocation, TerrainChunk>> iterator = worldTilesCache.entrySet().iterator();
-
-            while (iterator.hasNext())
-            {
-                Map.Entry<TerrainLocation, TerrainChunk> entry = iterator.next();
-
-                long time = System.currentTimeMillis() - entry.getValue().getCacheTime();
-
-                if (time >= cacheTime)
-                    iterator.remove();
-            }
-        }
-    }; */
 
     /**
      * Set the view distance in tiles for each direction according
@@ -129,6 +109,7 @@ public abstract class World extends AbstractAppState implements Closeable
         totalVisibleChunks = (wViewDistance + eViewDistance + 1) * (nViewDistance + sViewDistance + 1);
     }
 
+
     /**
      * Set the view distance in tiles for all directions.
      *
@@ -140,6 +121,7 @@ public abstract class World extends AbstractAppState implements Closeable
         setViewDistance(distance, distance, distance, distance);
     }
 
+
     /**
      *
      * @return notes whether or not this world has loaded all tiles required.
@@ -148,6 +130,7 @@ public abstract class World extends AbstractAppState implements Closeable
     {
         return this.isLoaded;
     }
+
 
     /**
      *
@@ -212,6 +195,12 @@ public abstract class World extends AbstractAppState implements Closeable
         return true;
     }
 
+    public void tileLoadedThreaded(TerrainChunk terrainChunk)
+    {
+        if (this.tileListener != null)
+            this.tileListener.tileLoadedThreaded(terrainChunk);
+    }
+
     private boolean checkForOldChunks()
     {
         Iterator<Map.Entry<TerrainLocation, TerrainChunk>> iterator = worldTiles.entrySet().iterator();
@@ -230,13 +219,15 @@ public abstract class World extends AbstractAppState implements Closeable
                 if (!this.tileUnloaded(chunk))
                     return false;
 
-                // chunk.setCacheTime();
-                // worldTilesCache.put(location, chunk);
-
-                // chunk.getControl(TerrainLodControl.class).detachAndCleanUpControl();
-
                 physicsSpace.remove(chunk);
                 app.getRootNode().detachChild(chunk);
+
+                // remove rigid objects...
+                if (chunk.getStaticRigidObjectsNode() != null)
+                {
+                    physicsSpace.remove(chunk.getStaticRigidObjectsNode());
+                    app.getRootNode().detachChild(chunk.getStaticRigidObjectsNode());
+                }
 
                 iterator.remove();
 
@@ -247,7 +238,6 @@ public abstract class World extends AbstractAppState implements Closeable
         return false;
     }
 
-    // private Set<TerrainLocation> worldTilesQue = new HashSet<TerrainLocation>();
     private final Set<TerrainLocation> worldTilesQue = new HashSet<TerrainLocation>();
     private final ConcurrentLinkedQueue<PendingChunk> newTiles = new ConcurrentLinkedQueue<PendingChunk>();
 
@@ -270,12 +260,20 @@ public abstract class World extends AbstractAppState implements Closeable
                 return false;
 
             ModifiedTerrainLodControl lodControl = new ModifiedTerrainLodControl(pending.getChunk(), app.getCamera(), threadpool);
+            lodControl.setLodCalculator(new DistanceLodCalculator(this.tileSize, 2.7f));
             pending.getChunk().addControl(lodControl);
 
             // pending.getChunk().setShadowMode(ShadowMode.Receive);
             worldTiles.put(pending.getLocation(), pending.getChunk());
             app.getRootNode().attachChild(pending.getChunk());
             physicsSpace.add(pending.getChunk());
+
+            // add static rigid objects
+            if (pending.getChunk().getStaticRigidObjectsNode() != null)
+            {
+                app.getRootNode().attachChild(pending.getChunk().getStaticRigidObjectsNode());
+                physicsSpace.add(pending.getChunk().getStaticRigidObjectsNode());
+            }
 
             return true;
         }
@@ -304,11 +302,20 @@ public abstract class World extends AbstractAppState implements Closeable
                             return false;
 
                         ModifiedTerrainLodControl lodControl = new ModifiedTerrainLodControl(chunk, app.getCamera(), threadpool);
+                        lodControl.setLodCalculator(new DistanceLodCalculator(this.tileSize, 2.7f));
                         chunk.addControl(lodControl);
 
                         app.getRootNode().attachChild(chunk);
                         physicsSpace.add(chunk);
                         worldTiles.put(location, chunk);
+
+                        // add static rigid objects
+                        if (chunk.getStaticRigidObjectsNode() != null)
+                        {
+                            app.getRootNode().attachChild(chunk.getStaticRigidObjectsNode());
+                            physicsSpace.add(chunk.getStaticRigidObjectsNode());
+                        }
+
 
                         return true;
                     }
@@ -324,6 +331,8 @@ public abstract class World extends AbstractAppState implements Closeable
                             {
                                 TerrainChunk newChunk = getTerrainChunk(location);
                                 PendingChunk pending = new PendingChunk(location, newChunk);
+
+                                tileLoadedThreaded(newChunk);
 
                                 newTiles.add(pending);
 
@@ -367,10 +376,12 @@ public abstract class World extends AbstractAppState implements Closeable
                     // top
                     final TerrainLocation topLocation = new TerrainLocation(x, topLz - 1);
                     final TerrainChunk topChunk = getTerrainChunk(topLocation);
+                    tileLoadedThreaded(topChunk);
 
                     // bottom
                     final TerrainLocation bottomLocation = new TerrainLocation(x, botRz + 1);
                     final TerrainChunk bottomChunk = getTerrainChunk(bottomLocation);
+                    tileLoadedThreaded(bottomChunk);
 
                     app.enqueue(new Callable<Boolean>()
                     {
@@ -391,12 +402,12 @@ public abstract class World extends AbstractAppState implements Closeable
                     // left
                     final TerrainLocation leftLocation = new TerrainLocation(topLx - 1, z);
                     final TerrainChunk leftChunk = getTerrainChunk(leftLocation);
+                    tileLoadedThreaded(leftChunk);
 
                     // right
                     final TerrainLocation rightLocation = new TerrainLocation(botRx + 1, z);
                     final TerrainChunk rightChunk = getTerrainChunk(rightLocation);
-
-
+                    tileLoadedThreaded(leftChunk);
 
                     app.enqueue(new Callable<Boolean>()
                     {
@@ -409,7 +420,6 @@ public abstract class World extends AbstractAppState implements Closeable
                         }
                     });
                 }
-
             }
         };
 

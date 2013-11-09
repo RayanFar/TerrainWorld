@@ -206,6 +206,8 @@ public class Main extends SimpleApplication
             public boolean tileLoaded(TerrainChunk terrainChunk) { return true; }
             public boolean tileUnloaded(TerrainChunk terrainChunk) { return true; }
 
+            public void tileLoadedThreaded(TerrainChunk terrainChunk) { }
+
             public String imageHeightmapRequired(int x, int z)
             {
                 String path = new StringBuilder()

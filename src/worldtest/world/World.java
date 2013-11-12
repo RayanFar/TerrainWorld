@@ -6,8 +6,7 @@ import com.jme3.bullet.PhysicsSpace;
 import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.queue.RenderQueue.ShadowMode;
-import com.jme3.terrain.geomipmap.ModifiedTerrainLodControl;
-import com.jme3.terrain.geomipmap.lodcalc.DistanceLodCalculator;
+import com.jme3.terrain.geomipmap.TerrainLodControl;
 import java.io.Closeable;
 import java.io.File;
 import java.util.HashMap;
@@ -266,8 +265,8 @@ public abstract class World extends AbstractAppState implements Closeable
             if (!tileLoaded(pending.getChunk()))
                 return false;
 
-            ModifiedTerrainLodControl lodControl = new ModifiedTerrainLodControl(pending.getChunk(), app.getCamera(), threadpool);
-            // lodControl.setLodCalculator(new DistanceLodCalculator(tileSize, 3f));
+            TerrainLodControl lodControl = new TerrainLodControl(pending.getChunk(), app.getCamera());
+            lodControl.setExecutor(threadpool);
             pending.getChunk().addControl(lodControl);
 
             pending.getChunk().setShadowMode(ShadowMode.Receive);
@@ -314,8 +313,8 @@ public abstract class World extends AbstractAppState implements Closeable
                         if (!tileLoaded(chunk))
                             return false;
 
-                        ModifiedTerrainLodControl lodControl = new ModifiedTerrainLodControl(chunk, app.getCamera(), threadpool);
-                        // lodControl.setLodCalculator(new DistanceLodCalculator(tileSize, 3f));
+                        TerrainLodControl lodControl = new TerrainLodControl(chunk, app.getCamera());
+                        lodControl.setExecutor(threadpool);
                         chunk.addControl(lodControl);
 
                         chunk.setShadowMode(ShadowMode.Receive);

@@ -36,7 +36,7 @@ public class TerrainChunk extends TerrainQuad
     public void setStaticRigidObjectsNode(Node node) { this.staticRigidObjects = node; }
 
     public Node getStaticNonRigidObjectsNode() { return this.staticNonRigidObjects; }
-    public void getStaticNonRigidObjectsNode(Node node) { this.staticNonRigidObjects = node; }
+    public void setStaticNonRigidObjectsNode(Node node) { this.staticNonRigidObjects = node; }
 
     public void save() throws IOException
     {

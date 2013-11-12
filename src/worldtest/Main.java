@@ -195,7 +195,7 @@ public class Main extends SimpleApplication
 
         newWorld.setWorldHeight(192f);
 
-        newWorld.setViewDistance(3);
+        newWorld.setViewDistance(2);
         // newWorld.setViewDistance(14, 1, 2, 1);
 
         Material terrainMaterial = createTerrainMaterial();

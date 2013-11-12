@@ -5,6 +5,7 @@ import com.jme3.app.state.AbstractAppState;
 import com.jme3.bullet.PhysicsSpace;
 import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
+import com.jme3.renderer.queue.RenderQueue.ShadowMode;
 import com.jme3.terrain.geomipmap.ModifiedTerrainLodControl;
 import com.jme3.terrain.geomipmap.lodcalc.DistanceLodCalculator;
 import java.io.Closeable;
@@ -229,6 +230,12 @@ public abstract class World extends AbstractAppState implements Closeable
                     app.getRootNode().detachChild(chunk.getStaticRigidObjectsNode());
                 }
 
+                // remove non-rigid objects
+                if (chunk.getStaticNonRigidObjectsNode() != null)
+                {
+                    app.getRootNode().detachChild(chunk.getStaticNonRigidObjectsNode());
+                }
+
                 iterator.remove();
 
                 return true;
@@ -260,10 +267,10 @@ public abstract class World extends AbstractAppState implements Closeable
                 return false;
 
             ModifiedTerrainLodControl lodControl = new ModifiedTerrainLodControl(pending.getChunk(), app.getCamera(), threadpool);
-            lodControl.setLodCalculator(new DistanceLodCalculator(this.tileSize, 2.7f));
+            // lodControl.setLodCalculator(new DistanceLodCalculator(tileSize, 3f));
             pending.getChunk().addControl(lodControl);
 
-            // pending.getChunk().setShadowMode(ShadowMode.Receive);
+            pending.getChunk().setShadowMode(ShadowMode.Receive);
             worldTiles.put(pending.getLocation(), pending.getChunk());
             app.getRootNode().attachChild(pending.getChunk());
             physicsSpace.add(pending.getChunk());
@@ -273,6 +280,12 @@ public abstract class World extends AbstractAppState implements Closeable
             {
                 app.getRootNode().attachChild(pending.getChunk().getStaticRigidObjectsNode());
                 physicsSpace.add(pending.getChunk().getStaticRigidObjectsNode());
+            }
+
+            // add static non-rigid objects
+            if (pending.getChunk().getStaticNonRigidObjectsNode() != null)
+            {
+                app.getRootNode().attachChild(pending.getChunk().getStaticNonRigidObjectsNode());
             }
 
             return true;
@@ -302,18 +315,28 @@ public abstract class World extends AbstractAppState implements Closeable
                             return false;
 
                         ModifiedTerrainLodControl lodControl = new ModifiedTerrainLodControl(chunk, app.getCamera(), threadpool);
-                        lodControl.setLodCalculator(new DistanceLodCalculator(this.tileSize, 2.7f));
+                        // lodControl.setLodCalculator(new DistanceLodCalculator(tileSize, 3f));
                         chunk.addControl(lodControl);
+
+                        chunk.setShadowMode(ShadowMode.Receive);
 
                         app.getRootNode().attachChild(chunk);
                         physicsSpace.add(chunk);
                         worldTiles.put(location, chunk);
+
+                        // updateNeighbours();
 
                         // add static rigid objects
                         if (chunk.getStaticRigidObjectsNode() != null)
                         {
                             app.getRootNode().attachChild(chunk.getStaticRigidObjectsNode());
                             physicsSpace.add(chunk.getStaticRigidObjectsNode());
+                        }
+
+                        // add static non-rigid objects
+                        if (chunk.getStaticNonRigidObjectsNode() != null)
+                        {
+                            app.getRootNode().attachChild(chunk.getStaticNonRigidObjectsNode());
                         }
 
 
@@ -376,11 +399,13 @@ public abstract class World extends AbstractAppState implements Closeable
                     // top
                     final TerrainLocation topLocation = new TerrainLocation(x, topLz - 1);
                     final TerrainChunk topChunk = getTerrainChunk(topLocation);
+                    topChunk.setShadowMode(ShadowMode.Receive);
                     tileLoadedThreaded(topChunk);
 
                     // bottom
                     final TerrainLocation bottomLocation = new TerrainLocation(x, botRz + 1);
                     final TerrainChunk bottomChunk = getTerrainChunk(bottomLocation);
+                    bottomChunk.setShadowMode(ShadowMode.Receive);
                     tileLoadedThreaded(bottomChunk);
 
                     app.enqueue(new Callable<Boolean>()
@@ -389,6 +414,7 @@ public abstract class World extends AbstractAppState implements Closeable
                         {
                             worldTilesCache.put(topLocation, topChunk);
                             worldTilesCache.put(bottomLocation, bottomChunk);
+
                             return true;
                         }
                     });
@@ -402,11 +428,13 @@ public abstract class World extends AbstractAppState implements Closeable
                     // left
                     final TerrainLocation leftLocation = new TerrainLocation(topLx - 1, z);
                     final TerrainChunk leftChunk = getTerrainChunk(leftLocation);
+                    leftChunk.setShadowMode(ShadowMode.Receive);
                     tileLoadedThreaded(leftChunk);
 
                     // right
                     final TerrainLocation rightLocation = new TerrainLocation(botRx + 1, z);
                     final TerrainChunk rightChunk = getTerrainChunk(rightLocation);
+                    rightChunk.setShadowMode(ShadowMode.Receive);
                     tileLoadedThreaded(leftChunk);
 
                     app.enqueue(new Callable<Boolean>()
